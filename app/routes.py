@@ -18,7 +18,7 @@ from .db import (
 
 main_routes = Blueprint("main_routes", __name__)
 
-NUTRITIONIX_ENDPOINT = "https://trackapi.nutritionix.com/v2/natural/nutrients"
+CALORIE_NINJAS_ENDPOINT = "https://api.calorieninjas.com/v1/nutrition"
 EASTERN = pytz.timezone('America/New_York')
 
 
@@ -38,10 +38,8 @@ def index(date_str=None):
     - Handles food entry via POST requests.
     - Displays log for the selected or current date.
     """
-    APP_ID = os.environ.get("NUTRITIONIX_APP_ID")
-    API_KEY = os.environ.get("NUTRITIONIX_API_KEY")
-    HEADERS = {'x-app-id': APP_ID, 'x-app-key': API_KEY}
-    api_configured = bool(APP_ID and API_KEY)
+    CALORIE_NINJAS_KEY = os.environ.get("CALORIE_NINJAS_KEY")
+    api_configured = bool(CALORIE_NINJAS_KEY)
     user_id = get_user_id()
     error_message = None
     # Check DB availability (friendly UI if missing)
@@ -89,26 +87,31 @@ def index(date_str=None):
             if query:
                 try:
                     if not api_configured:
-                        raise ValueError("Nutritionix keys missing — use manual entry below.")
+                        raise ValueError("API key missing — use manual entry below.")
 
-                    response = requests.post(NUTRITIONIX_ENDPOINT, headers=HEADERS, json={'query': query})
+                    response = requests.get(
+                        CALORIE_NINJAS_ENDPOINT,
+                        headers={'X-Api-Key': CALORIE_NINJAS_KEY},
+                        params={'query': query}
+                    )
                     response.raise_for_status()
                     result = response.json()
 
-                    if not result.get('foods'):
+                    foods = result.get('items') or []
+                    if not foods:
                         error_message = "Couldn't find that food. Please try again."
                     else:
                         today = get_now().date()
 
-                        # Extract carb data for each food item returned
-                        for item in result.get('foods', []):
+                        for item in foods:
+                            carbs_val = item.get('carbohydrates_total_g') or item.get('carbs_total_g') or 0
                             insert_log(
                                 user_id,
                                 today,
-                                item.get('food_name'),
-                                item.get('nf_total_carbohydrate', 0),
-                                item.get('serving_qty'),
-                                item.get('serving_unit')
+                                item.get('name'),
+                                carbs_val,
+                                item.get('serving_size_g'),
+                                'g'
                             )
 
                 except requests.exceptions.RequestException:

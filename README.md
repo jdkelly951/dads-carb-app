@@ -28,7 +28,7 @@ Render deploy (few clicks):
 - Create new "Web Service" → connect this repo → Environment: Python
 - Build command: `pip install -r requirements.txt`
 - Start command: `gunicorn -b 0.0.0.0:$PORT run:app`
-- Add env vars `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY`, `DATABASE_URL` (Render injects this automatically when you add a Render PostgreSQL)
+- Add env vars `CALORIE_NINJAS_KEY` (for auto lookup/voice), `DATABASE_URL` (from your Postgres provider, e.g., Neon or Render), `NUTRITIONIX_APP_ID` / `NUTRITIONIX_API_KEY` no longer needed.
 - Plan: Free → deploy
 
 Deploy button (Render):
@@ -39,6 +39,11 @@ Deploy button (Render):
 - In Render dashboard: New → PostgreSQL → Free → create.
 - Copy the `External Database URL` (or click "Connect" on your service) and set it as `DATABASE_URL` env var on the web service.
 - No migrations needed; the app creates the `food_logs` table automatically on boot.
+
+### Nutrition API (auto lookup/voice)
+- Nutritionix free tier ended; switched to CalorieNinjas (has a free quota).
+- Get a free CalorieNinjas API key, then set env var `CALORIE_NINJAS_KEY` on your web service.
+- Without this key, manual entry still works.
 
 ## Tech
 Python • Flask • Requests • HTML/CSS
