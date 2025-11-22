@@ -92,7 +92,8 @@ def index(date_str=None):
                     response = requests.get(
                         API_NINJAS_ENDPOINT,
                         headers={'X-Api-Key': API_NINJAS_KEY},
-                        params={'query': query}
+                        params={'query': query},
+                        timeout=8
                     )
                     response.raise_for_status()
                     result = response.json()
@@ -114,6 +115,15 @@ def index(date_str=None):
                                 'g'
                             )
 
+                except requests.exceptions.HTTPError as e:
+                    if e.response is not None:
+                        try:
+                            resp_msg = e.response.json()
+                        except Exception:
+                            resp_msg = e.response.text[:200]
+                        error_message = f"Nutrition API error {e.response.status_code}: {resp_msg}"
+                    else:
+                        error_message = "Nutrition API HTTP error."
                 except requests.exceptions.RequestException:
                     error_message = "Could not connect to nutrition service."
                 except ValueError as e:
