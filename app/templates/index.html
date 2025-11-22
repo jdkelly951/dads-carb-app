@@ -99,6 +99,16 @@
       text-align: center;
     }
 
+    .info-box {
+      background-color: #fff8e5;
+      color: #7a5b00;
+      padding: 12px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      border-left: 4px solid #f0c040;
+      font-size: 0.95em;
+    }
+
     /* Voice input and tutorial */
     .search-container { display: flex; align-items: center; }
     #food-input { flex-grow: 1; }
@@ -151,22 +161,41 @@
     <div class="error-box">{{ error }}</div>
     {% endif %}
 
+    {% if not api_configured %}
+    <div class="info-box">
+      Nutritionix keys are not set. Voice/auto lookup is disabled — use the manual entry form below, or set <code>NUTRITIONIX_APP_ID</code> and <code>NUTRITIONIX_API_KEY</code> on the server to re-enable.
+    </div>
+    {% endif %}
+
     <!-- Food input form (only available on today's date) -->
     {% if viewing_today %}
     <form action="/" method="post">
+      <input type="hidden" name="mode" value="auto" />
       <div class="search-container">
-        <input id="food-input" list="food-suggestions" type="text" name="food_query" placeholder="e.g., 1 apple and toast" required />
-        <button type="button" id="mic-button">🎤</button>
+        <input id="food-input" list="food-suggestions" type="text" name="food_query" placeholder="e.g., 1 apple and toast" {% if api_configured %}required{% endif %} {% if not api_configured %}disabled{% endif %}/>
+        <button type="button" id="mic-button" {% if not api_configured %}style="display:none"{% endif %}>🎤</button>
       </div>
       <datalist id="food-suggestions">
         {% for suggestion in suggestions %}
         <option value="{{ suggestion }}">
         {% endfor %}
       </datalist>
-      <button type="submit">Add Food</button>
+      <button type="submit" {% if not api_configured %}disabled{% endif %}>Add Food</button>
     </form>
     <p id="ios-tip" style="display: none;">Tip: Tap the microphone on your keyboard to use voice input!</p>
     <p id="mic-unsupported" style="display: none;">Voice input not supported in this browser. Try Safari on iPhone.</p>
+
+    <h3 style="text-align:center; margin-top:25px;">Manual entry (no API needed)</h3>
+    <form action="/" method="post" style="margin-top:10px;">
+      <input type="hidden" name="mode" value="manual" />
+      <input type="text" name="manual_food" placeholder="Food name" required style="margin-bottom:10px; padding:12px; font-size:1em;" />
+      <input type="number" step="0.1" name="manual_carbs" placeholder="Carbs (g)" required style="margin-bottom:10px; padding:12px; font-size:1em;" />
+      <div class="search-container" style="gap:10px;">
+        <input type="number" step="0.1" name="manual_serving_qty" placeholder="Qty (optional)" style="padding:12px; font-size:1em;" />
+        <input type="text" name="manual_serving_unit" placeholder="Unit (cup, slice...)" style="padding:12px; font-size:1em;" />
+      </div>
+      <button type="submit" style="margin-top:10px;">Add Manual Entry</button>
+    </form>
     {% endif %}
 
     <!-- Daily totals -->

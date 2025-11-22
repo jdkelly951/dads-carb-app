@@ -32,6 +32,7 @@ def index(date_str=None):
     APP_ID = os.environ.get("NUTRITIONIX_APP_ID")
     API_KEY = os.environ.get("NUTRITIONIX_API_KEY")
     HEADERS = {'x-app-id': APP_ID, 'x-app-key': API_KEY}
+    api_configured = bool(APP_ID and API_KEY)
     user_id = get_user_id()
     error_message = None
     all_data = load_data(user_id)
@@ -49,38 +50,66 @@ def index(date_str=None):
         if not viewing_today:
             return redirect(url_for('main_routes.index'))
 
-        query = request.form.get('food_query')
-        if query:
+        form_mode = request.form.get('mode', 'auto')
+
+        # Manual entry fallback (doesn't need Nutritionix keys)
+        if form_mode == 'manual':
+            food_name = request.form.get('manual_food')
+            carbs = request.form.get('manual_carbs')
+            serving_qty = request.form.get('manual_serving_qty') or None
+            serving_unit = request.form.get('manual_serving_unit') or None
+
             try:
-                if not all([APP_ID, API_KEY]):
-                    raise ValueError("API keys are not configured.")
+                carbs_val = float(carbs) if carbs not in (None, "") else None
+            except ValueError:
+                carbs_val = None
 
-                response = requests.post(NUTRITIONIX_ENDPOINT, headers=HEADERS, json={'query': query})
-                response.raise_for_status()
-                result = response.json()
+            if not food_name or carbs_val is None:
+                error_message = "Please provide a food name and carb grams."
+            else:
+                today_str = get_now().strftime('%Y-%m-%d')
+                log_for_today = all_data.get(today_str, [])
+                log_for_today.append({
+                    'food': food_name,
+                    'carbs': carbs_val,
+                    'serving_qty': float(serving_qty) if serving_qty else None,
+                    'serving_unit': serving_unit
+                })
+                all_data[today_str] = log_for_today
+                save_data(user_id, all_data)
+        else:
+            query = request.form.get('food_query')
+            if query:
+                try:
+                    if not api_configured:
+                        raise ValueError("Nutritionix keys missing — use manual entry below.")
 
-                if not result.get('foods'):
-                    error_message = "Couldn't find that food. Please try again."
-                else:
-                    today_str = get_now().strftime('%Y-%m-%d')
-                    log_for_today = all_data.get(today_str, [])
+                    response = requests.post(NUTRITIONIX_ENDPOINT, headers=HEADERS, json={'query': query})
+                    response.raise_for_status()
+                    result = response.json()
 
-                    # Extract carb data for each food item returned
-                    for item in result.get('foods', []):
-                        log_for_today.append({
-                            'food': item.get('food_name'),
-                            'carbs': item.get('nf_total_carbohydrate', 0),
-                            'serving_qty': item.get('serving_qty'),
-                            'serving_unit': item.get('serving_unit')
-                        })
+                    if not result.get('foods'):
+                        error_message = "Couldn't find that food. Please try again."
+                    else:
+                        today_str = get_now().strftime('%Y-%m-%d')
+                        log_for_today = all_data.get(today_str, [])
 
-                    all_data[today_str] = log_for_today
-                    save_data(user_id, all_data)
+                        # Extract carb data for each food item returned
+                        for item in result.get('foods', []):
+                            log_for_today.append({
+                                'food': item.get('food_name'),
+                                'carbs': item.get('nf_total_carbohydrate', 0),
+                                'serving_qty': item.get('serving_qty'),
+                                'serving_unit': item.get('serving_unit')
+                            })
 
-            except requests.exceptions.RequestException:
-                error_message = "Could not connect to nutrition service."
-            except ValueError as e:
-                error_message = str(e)
+                        all_data[today_str] = log_for_today
+                        save_data(user_id, all_data)
+
+                except requests.exceptions.RequestException:
+                    error_message = "Could not connect to nutrition service."
+                except ValueError as e:
+                    error_message = str(e)
 
     # Get food log and carb totals for the displayed date
     food_log_for_display_date = all_data.get(display_date, [])
@@ -113,7 +142,8 @@ def index(date_str=None):
         display_date_raw=display_date,
         viewing_today=viewing_today,
         error=error_message,
-        suggestions=suggestions
+        suggestions=suggestions,
+        api_configured=api_configured
     ))
     response.set_cookie('user_id', user_id, max_age=60 * 60 * 24 * 365)
     return response

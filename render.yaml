@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: dads-carb-app
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -b 0.0.0.0:10000 run:app"
+    envVars:
+      - key: NUTRITIONIX_APP_ID
+        sync: false
+      - key: NUTRITIONIX_API_KEY
+        sync: false

@@ -19,11 +19,17 @@ Coming soon on GitHub Pages (static landing). The Flask API needs a server host 
 3) Start the app: `python run.py`  
 4) Open the URL Flask prints (usually http://127.0.0.1:5000)
 
+No keys? You can still use the **manual entry** form (carb grams you type) but API lookups/voice are disabled until the keys are set.
+
 ## Deploy
 GitHub Pages is static-only, so you'll still need a small server to run Flask. Quick option: Render free web service.
 
 Render one-liner (from this repo root):
 - Create a new "Web Service" → connect this repo → Environment: Python → Start command: `gunicorn -b 0.0.0.0:10000 run:app` → Add env vars `NUTRITIONIX_APP_ID` and `NUTRITIONIX_API_KEY` → deploy.
+
+Deploy button (Render):
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fjdkelly951%2Fdads-carb-app)
 
 ## Tech
 Python • Flask • Requests • HTML/CSS
