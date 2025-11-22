@@ -19,6 +19,7 @@ from .db import (
 main_routes = Blueprint("main_routes", __name__)
 
 API_NINJAS_ENDPOINT = "https://api.api-ninjas.com/v1/nutrition"
+OPENFOODFACTS_ENDPOINT = "https://world.openfoodfacts.org/cgi/search.pl"
 EASTERN = pytz.timezone('America/New_York')
 
 
@@ -39,7 +40,7 @@ def index(date_str=None):
     - Displays log for the selected or current date.
     """
     API_NINJAS_KEY = os.environ.get("API_NINJAS_KEY")
-    api_configured = bool(API_NINJAS_KEY)
+    has_api_ninjas = bool(API_NINJAS_KEY)
     user_id = get_user_id()
     error_message = None
     # Check DB availability (friendly UI if missing)
@@ -85,49 +86,76 @@ def index(date_str=None):
         else:
             query = request.form.get('food_query')
             if query:
-                try:
-                    if not api_configured:
-                        raise ValueError("API key missing — use manual entry below.")
+                foods = []
+                api_error = None
 
-                    response = requests.get(
-                        API_NINJAS_ENDPOINT,
-                        headers={'X-Api-Key': API_NINJAS_KEY},
-                        params={'query': query},
-                        timeout=8
-                    )
-                    response.raise_for_status()
-                    result = response.json()
+                # First try API Ninjas if key is present
+                if has_api_ninjas:
+                    try:
+                        response = requests.get(
+                            API_NINJAS_ENDPOINT,
+                            headers={'X-Api-Key': API_NINJAS_KEY},
+                            params={'query': query},
+                            timeout=8
+                        )
+                        response.raise_for_status()
+                        result = response.json()
+                        foods = result.get('items') or []
+                    except requests.exceptions.HTTPError as e:
+                        api_error = f"Nutrition API error {e.response.status_code}: {e.response.text[:200]}"
+                    except requests.exceptions.RequestException:
+                        api_error = "Could not connect to nutrition service."
 
-                    foods = result.get('items') or []
-                    if not foods:
-                        error_message = "Couldn't find that food. Please try again."
-                    else:
-                        today = get_now().date()
+                # Fallback to OpenFoodFacts (no key needed)
+                if not foods:
+                    try:
+                        off_resp = requests.get(
+                            OPENFOODFACTS_ENDPOINT,
+                            params={
+                                'search_terms': query,
+                                'search_simple': 1,
+                                'action': 'process',
+                                'json': 1,
+                                'page_size': 5,
+                                'fields': 'product_name,nutriments,serving_size,serving_quantity'
+                            },
+                            timeout=8
+                        )
+                        off_resp.raise_for_status()
+                        data = off_resp.json()
+                        products = data.get('products', [])
+                        for p in products:
+                            name = p.get('product_name') or 'Unknown item'
+                            nutr = p.get('nutriments', {}) or {}
+                            carbs_val = nutr.get('carbohydrates_100g')
+                            if carbs_val is None:
+                                carbs_val = nutr.get('carbohydrates_serving')
+                            if carbs_val is None:
+                                continue
+                            foods.append({
+                                'name': name,
+                                'carbohydrates_total_g': carbs_val,
+                                'serving_size_g': nutr.get('serving_size') or p.get('serving_quantity')
+                            })
+                    except requests.exceptions.RequestException:
+                        # keep any prior api_error or set generic
+                        if not api_error:
+                            api_error = "Nutrition lookup failed."
 
-                        for item in foods:
-                            carbs_val = item.get('carbohydrates_total_g') or item.get('carbs_total_g') or 0
-                            insert_log(
-                                user_id,
-                                today,
-                                item.get('name'),
-                                carbs_val,
-                                item.get('serving_size_g'),
-                                'g'
-                            )
-
-                except requests.exceptions.HTTPError as e:
-                    if e.response is not None:
-                        try:
-                            resp_msg = e.response.json()
-                        except Exception:
-                            resp_msg = e.response.text[:200]
-                        error_message = f"Nutrition API error {e.response.status_code}: {resp_msg}"
-                    else:
-                        error_message = "Nutrition API HTTP error."
-                except requests.exceptions.RequestException:
-                    error_message = "Could not connect to nutrition service."
-                except ValueError as e:
-                    error_message = str(e)
+                if foods:
+                    today = get_now().date()
+                    for item in foods:
+                        carbs_val = item.get('carbohydrates_total_g') or item.get('carbs_total_g') or 0
+                        insert_log(
+                            user_id,
+                            today,
+                            item.get('name'),
+                            carbs_val,
+                            item.get('serving_size_g'),
+                            'g'
+                        )
+                else:
+                    error_message = api_error or "Couldn't find that food. Please try again."
 
     # Get food log and carb totals for the displayed date
     display_date_obj = datetime.strptime(display_date, '%Y-%m-%d').date()
@@ -166,7 +194,8 @@ def index(date_str=None):
         viewing_today=viewing_today,
         error=error_message,
         suggestions=suggestions,
-        api_configured=api_configured,
+        api_configured=True,
+        has_api_ninjas=has_api_ninjas,
         db_error=db_error
     ))
     response.set_cookie('user_id', user_id, max_age=60 * 60 * 24 * 365)

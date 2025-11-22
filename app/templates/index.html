@@ -165,9 +165,9 @@
     <div class="error-box">Database unavailable: {{ db_error }}</div>
     {% endif %}
 
-    {% if not api_configured %}
+    {% if not has_api_ninjas %}
     <div class="info-box">
-      Nutrition API key is not set. Auto lookup/voice is disabled — use the manual entry form below, or set <code>API_NINJAS_KEY</code> on the server to re-enable.
+      Using free lookup (OpenFoodFacts). For more accurate results, add an <code>API_NINJAS_KEY</code>; auto lookup/voice still works with the free fallback.
     </div>
     {% endif %}
 
@@ -176,15 +176,15 @@
     <form action="/" method="post">
       <input type="hidden" name="mode" value="auto" />
       <div class="search-container">
-        <input id="food-input" list="food-suggestions" type="text" name="food_query" placeholder="e.g., 1 apple and toast" {% if api_configured %}required{% endif %} {% if not api_configured %}disabled{% endif %}/>
-        <button type="button" id="mic-button" {% if not api_configured %}style="display:none"{% endif %}>🎤</button>
+        <input id="food-input" list="food-suggestions" type="text" name="food_query" placeholder="e.g., 1 apple and toast" required />
+        <button type="button" id="mic-button">🎤</button>
       </div>
       <datalist id="food-suggestions">
         {% for suggestion in suggestions %}
         <option value="{{ suggestion }}">
         {% endfor %}
       </datalist>
-      <button type="submit" {% if not api_configured %}disabled{% endif %}>Add Food</button>
+      <button type="submit">Add Food</button>
     </form>
     <p id="ios-tip" style="display: none;">Tip: Tap the microphone on your keyboard to use voice input!</p>
     <p id="mic-unsupported" style="display: none;">Voice input not supported in this browser. Try Safari on iPhone.</p>
