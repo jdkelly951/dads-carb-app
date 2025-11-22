@@ -18,7 +18,7 @@ from .db import (
 
 main_routes = Blueprint("main_routes", __name__)
 
-CALORIE_NINJAS_ENDPOINT = "https://api.calorieninjas.com/v1/nutrition"
+API_NINJAS_ENDPOINT = "https://api.api-ninjas.com/v1/nutrition"
 EASTERN = pytz.timezone('America/New_York')
 
 
@@ -38,8 +38,8 @@ def index(date_str=None):
     - Handles food entry via POST requests.
     - Displays log for the selected or current date.
     """
-    CALORIE_NINJAS_KEY = os.environ.get("CALORIE_NINJAS_KEY")
-    api_configured = bool(CALORIE_NINJAS_KEY)
+    API_NINJAS_KEY = os.environ.get("API_NINJAS_KEY")
+    api_configured = bool(API_NINJAS_KEY)
     user_id = get_user_id()
     error_message = None
     # Check DB availability (friendly UI if missing)
@@ -90,8 +90,8 @@ def index(date_str=None):
                         raise ValueError("API key missing — use manual entry below.")
 
                     response = requests.get(
-                        CALORIE_NINJAS_ENDPOINT,
-                        headers={'X-Api-Key': CALORIE_NINJAS_KEY},
+                        API_NINJAS_ENDPOINT,
+                        headers={'X-Api-Key': API_NINJAS_KEY},
                         params={'query': query}
                     )
                     response.raise_for_status()
