@@ -18,7 +18,6 @@ from .db import (
 
 main_routes = Blueprint("main_routes", __name__)
 
-API_NINJAS_ENDPOINT = "https://api.api-ninjas.com/v1/nutrition"
 OPENFOODFACTS_ENDPOINT = "https://world.openfoodfacts.org/cgi/search.pl"
 EASTERN = pytz.timezone('America/New_York')
 
@@ -39,8 +38,6 @@ def index(date_str=None):
     - Handles food entry via POST requests.
     - Displays log for the selected or current date.
     """
-    API_NINJAS_KEY = os.environ.get("API_NINJAS_KEY")
-    has_api_ninjas = bool(API_NINJAS_KEY)
     user_id = get_user_id()
     error_message = None
     # Check DB availability (friendly UI if missing)
@@ -89,58 +86,38 @@ def index(date_str=None):
                 foods = []
                 api_error = None
 
-                # First try API Ninjas if key is present
-                if has_api_ninjas:
-                    try:
-                        response = requests.get(
-                            API_NINJAS_ENDPOINT,
-                            headers={'X-Api-Key': API_NINJAS_KEY},
-                            params={'query': query},
-                            timeout=8
-                        )
-                        response.raise_for_status()
-                        result = response.json()
-                        foods = result.get('items') or []
-                    except requests.exceptions.HTTPError as e:
-                        api_error = f"Nutrition API error {e.response.status_code}: {e.response.text[:200]}"
-                    except requests.exceptions.RequestException:
-                        api_error = "Could not connect to nutrition service."
-
-                # Fallback to OpenFoodFacts (no key needed)
-                if not foods:
-                    try:
-                        off_resp = requests.get(
-                            OPENFOODFACTS_ENDPOINT,
-                            params={
-                                'search_terms': query,
-                                'search_simple': 1,
-                                'action': 'process',
-                                'json': 1,
-                                'page_size': 5,
-                                'fields': 'product_name,nutriments,serving_size,serving_quantity'
-                            },
-                            timeout=8
-                        )
-                        off_resp.raise_for_status()
-                        data = off_resp.json()
-                        products = data.get('products', [])
-                        for p in products:
-                            name = p.get('product_name') or 'Unknown item'
-                            nutr = p.get('nutriments', {}) or {}
-                            carbs_val = nutr.get('carbohydrates_100g')
-                            if carbs_val is None:
-                                carbs_val = nutr.get('carbohydrates_serving')
-                            if carbs_val is None:
-                                continue
-                            foods.append({
-                                'name': name,
-                                'carbohydrates_total_g': carbs_val,
-                                'serving_size_g': nutr.get('serving_size') or p.get('serving_quantity')
-                            })
-                    except requests.exceptions.RequestException:
-                        # keep any prior api_error or set generic
-                        if not api_error:
-                            api_error = "Nutrition lookup failed."
+                # OpenFoodFacts (no key needed)
+                try:
+                    off_resp = requests.get(
+                        OPENFOODFACTS_ENDPOINT,
+                        params={
+                            'search_terms': query,
+                            'search_simple': 1,
+                            'action': 'process',
+                            'json': 1,
+                            'page_size': 5,
+                            'fields': 'product_name,nutriments,serving_size,serving_quantity'
+                        },
+                        timeout=8
+                    )
+                    off_resp.raise_for_status()
+                    data = off_resp.json()
+                    products = data.get('products', [])
+                    for p in products:
+                        name = p.get('product_name') or 'Unknown item'
+                        nutr = p.get('nutriments', {}) or {}
+                        carbs_val = nutr.get('carbohydrates_100g')
+                        if carbs_val is None:
+                            carbs_val = nutr.get('carbohydrates_serving')
+                        if carbs_val is None:
+                            continue
+                        foods.append({
+                            'name': name,
+                            'carbohydrates_total_g': carbs_val,
+                            'serving_size_g': nutr.get('serving_size') or p.get('serving_quantity')
+                        })
+                except requests.exceptions.RequestException:
+                    api_error = "Nutrition lookup failed."
 
                 if foods:
                     today = get_now().date()
@@ -194,8 +171,6 @@ def index(date_str=None):
         viewing_today=viewing_today,
         error=error_message,
         suggestions=suggestions,
-        api_configured=True,
-        has_api_ninjas=has_api_ninjas,
         db_error=db_error
     ))
     response.set_cookie('user_id', user_id, max_age=60 * 60 * 24 * 365)

@@ -165,11 +165,9 @@
     <div class="error-box">Database unavailable: {{ db_error }}</div>
     {% endif %}
 
-    {% if not has_api_ninjas %}
     <div class="info-box">
-      Using free lookup (OpenFoodFacts). For more accurate results, add an <code>API_NINJAS_KEY</code>; auto lookup/voice still works with the free fallback.
+      Using free nutrition lookup (OpenFoodFacts). Manual entry always works. Results may be approximate.
     </div>
-    {% endif %}
 
     <!-- Food input form (only available on today's date) -->
     {% if viewing_today %}

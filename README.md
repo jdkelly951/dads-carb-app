@@ -28,7 +28,7 @@ Render deploy (few clicks):
 - Create new "Web Service" → connect this repo → Environment: Python
 - Build command: `pip install -r requirements.txt`
 - Start command: `gunicorn -b 0.0.0.0:$PORT run:app`
-- Env vars: `DATABASE_URL` (from your Postgres provider, e.g., Neon). Optional: `API_NINJAS_KEY` for higher-quality lookup; without it the app falls back to OpenFoodFacts (no key needed).
+- Env vars: `DATABASE_URL` (from your Postgres provider, e.g., Neon). No nutrition API key required; the app uses free OpenFoodFacts for lookups and still supports manual entry.
 - Plan: Free → deploy
 
 Deploy button (Render):
@@ -41,8 +41,7 @@ Deploy button (Render):
 - No migrations needed; the app creates the `food_logs` table automatically on boot.
 
 ### Nutrition API (auto lookup/voice)
-- Default: uses OpenFoodFacts (free, no key). Results are best-effort.
-- Optional: set `API_NINJAS_KEY` (api-ninjas.com) for more accurate nutrition parsing; the app will try API Ninjas first and fall back to OpenFoodFacts.
+- Uses OpenFoodFacts (free, no key). Voice/auto lookup uses that data; manual entry always available.
 
 ## Tech
 Python • Flask • Requests • HTML/CSS
