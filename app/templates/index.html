@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Carb Counter</title>
+  <title>Dad's Carb App</title>
   <style>
     /* Basic styling and layout */
     body {
@@ -131,7 +131,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>Dad's Carb Counter <small>Viewing: {{ display_date_str }}</small></h1>
+    <h1>Dad's Carb App <small>Viewing: {{ display_date_str }}</small></h1>
 
     <!-- Tutorial box shown only once using cookies -->
     {% if not request.cookies.get('seen_tutorial') %}

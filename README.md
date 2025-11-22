@@ -1,4 +1,4 @@
-# Dad’s Carb Counter
+# Dad's Carb App
 
 Small **Python/Flask** app to log meals and track daily carbohydrate intake with a rolling **7-day average**. Built for my dad (diabetes).
 
