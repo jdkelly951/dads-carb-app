@@ -98,7 +98,11 @@ def index(date_str=None):
                             'page_size': 5,
                             'fields': 'product_name,nutriments,serving_size,serving_quantity'
                         },
-                        timeout=8
+                        headers={
+                            'User-Agent': 'dads-carb-app/1.0 (+https://github.com/jdkelly951/dads-carb-app)',
+                            'Accept': 'application/json'
+                        },
+                        timeout=10
                     )
                     off_resp.raise_for_status()
                     data = off_resp.json()
@@ -116,8 +120,10 @@ def index(date_str=None):
                             'carbohydrates_total_g': carbs_val,
                             'serving_size_g': nutr.get('serving_size') or p.get('serving_quantity')
                         })
+                except requests.exceptions.HTTPError as e:
+                    api_error = f"Nutrition lookup failed ({e.response.status_code})."
                 except requests.exceptions.RequestException:
-                    api_error = "Nutrition lookup failed."
+                    api_error = "Nutrition lookup failed (network)."
 
                 if foods:
                     today = get_now().date()
