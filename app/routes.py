@@ -1,11 +1,20 @@
 import os
-import json
 import uuid
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from flask import Blueprint, request, redirect, url_for, render_template, make_response
 import pytz
-from .utils import load_data, save_data, get_suggestions, get_now
+from .utils import get_now
+from .db import (
+    fetch_logs_for_date,
+    insert_log,
+    delete_latest_for_date,
+    delete_by_index,
+    clear_day as clear_day_db,
+    list_dates,
+    get_totals_for_dates,
+    get_top_foods,
+)
 
 main_routes = Blueprint("main_routes", __name__)
 
@@ -35,7 +44,13 @@ def index(date_str=None):
     api_configured = bool(APP_ID and API_KEY)
     user_id = get_user_id()
     error_message = None
-    all_data = load_data(user_id)
+    # Check DB availability (friendly UI if missing)
+    db_error = None
+    try:
+        # noop query for health via listing dates
+        list_dates(user_id)
+    except Exception as e:
+        db_error = str(e)
 
     # Determine which date to display
     if date_str is None:
@@ -67,16 +82,8 @@ def index(date_str=None):
             if not food_name or carbs_val is None:
                 error_message = "Please provide a food name and carb grams."
             else:
-                today_str = get_now().strftime('%Y-%m-%d')
-                log_for_today = all_data.get(today_str, [])
-                log_for_today.append({
-                    'food': food_name,
-                    'carbs': carbs_val,
-                    'serving_qty': float(serving_qty) if serving_qty else None,
-                    'serving_unit': serving_unit
-                })
-                all_data[today_str] = log_for_today
-                save_data(user_id, all_data)
+                today = get_now().date()
+                insert_log(user_id, today, food_name, carbs_val, float(serving_qty) if serving_qty else None, serving_unit)
         else:
             query = request.form.get('food_query')
             if query:
@@ -91,20 +98,18 @@ def index(date_str=None):
                     if not result.get('foods'):
                         error_message = "Couldn't find that food. Please try again."
                     else:
-                        today_str = get_now().strftime('%Y-%m-%d')
-                        log_for_today = all_data.get(today_str, [])
+                        today = get_now().date()
 
                         # Extract carb data for each food item returned
                         for item in result.get('foods', []):
-                            log_for_today.append({
-                                'food': item.get('food_name'),
-                                'carbs': item.get('nf_total_carbohydrate', 0),
-                                'serving_qty': item.get('serving_qty'),
-                                'serving_unit': item.get('serving_unit')
-                            })
-
-                        all_data[today_str] = log_for_today
-                        save_data(user_id, all_data)
+                            insert_log(
+                                user_id,
+                                today,
+                                item.get('food_name'),
+                                item.get('nf_total_carbohydrate', 0),
+                                item.get('serving_qty'),
+                                item.get('serving_unit')
+                            )
 
                 except requests.exceptions.RequestException:
                     error_message = "Could not connect to nutrition service."
@@ -112,25 +117,30 @@ def index(date_str=None):
                     error_message = str(e)
 
     # Get food log and carb totals for the displayed date
-    food_log_for_display_date = all_data.get(display_date, [])
-    total_carbs = sum(item['carbs'] for item in food_log_for_display_date)
+    display_date_obj = datetime.strptime(display_date, '%Y-%m-%d').date()
+    food_log_for_display_date = []
+    total_carbs = 0
+    try:
+        food_log_for_display_date = fetch_logs_for_date(user_id, display_date_obj)
+        total_carbs = sum(float(item['carbs']) for item in food_log_for_display_date)
+    except Exception as e:
+        if not db_error:
+            db_error = str(e)
 
     # Calculate 7-day average carbs
     past_7_dates = [
-        (get_now() - timedelta(days=i)).strftime('%Y-%m-%d')
+        (get_now() - timedelta(days=i)).date()
         for i in range(7)
     ]
-    carbs_last_7_days = [
-        sum(item['carbs'] for item in all_data.get(date, []))
-        for date in past_7_dates
-    ]
+    past_7_str = [d.isoformat() for d in past_7_dates]
+    totals_map = get_totals_for_dates(user_id, past_7_dates) if not db_error else {}
+    carbs_last_7_days = [totals_map.get(d, 0) for d in past_7_str]
     average_7_days = round(sum(carbs_last_7_days) / 7, 1)
 
     # Format display date nicely
-    display_date_obj = datetime.strptime(display_date, '%Y-%m-%d')
     display_date_formatted = display_date_obj.strftime('%A, %B %d, %Y')
 
-    suggestions = get_suggestions(all_data)
+    suggestions = get_top_foods(user_id) if not db_error else []
 
     # Render the main page and set persistent cookie
     response = make_response(render_template(
@@ -143,7 +153,8 @@ def index(date_str=None):
         viewing_today=viewing_today,
         error=error_message,
         suggestions=suggestions,
-        api_configured=api_configured
+        api_configured=api_configured,
+        db_error=db_error
     ))
     response.set_cookie('user_id', user_id, max_age=60 * 60 * 24 * 365)
     return response
@@ -155,8 +166,10 @@ def history():
     View a list of all tracked dates for the current user.
     """
     user_id = get_user_id()
-    all_data = load_data(user_id)
-    sorted_dates = sorted(all_data.keys(), reverse=True)
+    try:
+        sorted_dates = list_dates(user_id)
+    except Exception:
+        sorted_dates = []
     response = make_response(render_template('history.html', dates=sorted_dates))
     response.set_cookie('user_id', user_id, max_age=60 * 60 * 24 * 365)
     return response
@@ -168,11 +181,8 @@ def undo():
     Remove the most recent entry from today's food log.
     """
     user_id = get_user_id()
-    all_data = load_data(user_id)
-    today_str = get_now().strftime('%Y-%m-%d')
-    if today_str in all_data and all_data[today_str]:
-        all_data[today_str].pop()
-        save_data(user_id, all_data)
+    today = get_now().date()
+    delete_latest_for_date(user_id, today)
     return redirect(url_for('main_routes.index'))
 
 
@@ -182,10 +192,11 @@ def clear_day(date_str):
     Completely delete all food logs for a specific date.
     """
     user_id = get_user_id()
-    all_data = load_data(user_id)
-    if date_str in all_data:
-        del all_data[date_str]
-        save_data(user_id, all_data)
+    try:
+        entry_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        clear_day_db(user_id, entry_date)
+    except Exception:
+        pass
     return redirect(url_for('main_routes.history'))
 
 
@@ -195,8 +206,9 @@ def delete_item(date_str, item_index):
     Delete a single item from the food log of a given date.
     """
     user_id = get_user_id()
-    all_data = load_data(user_id)
-    if date_str in all_data and 0 <= item_index < len(all_data[date_str]):
-        all_data[date_str].pop(item_index)
-        save_data(user_id, all_data)
+    try:
+        entry_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        delete_by_index(user_id, entry_date, item_index)
+    except Exception:
+        pass
     return redirect(url_for('main_routes.index', date_str=date_str))

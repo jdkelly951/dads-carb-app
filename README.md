@@ -24,12 +24,21 @@ No keys? You can still use the **manual entry** form (carb grams you type) but A
 ## Deploy
 GitHub Pages is static-only, so you'll still need a small server to run Flask. Quick option: Render free web service.
 
-Render one-liner (from this repo root):
-- Create a new "Web Service" → connect this repo → Environment: Python → Start command: `gunicorn -b 0.0.0.0:10000 run:app` → Add env vars `NUTRITIONIX_APP_ID` and `NUTRITIONIX_API_KEY` → deploy.
+Render deploy (few clicks):
+- Create new "Web Service" → connect this repo → Environment: Python
+- Build command: `pip install -r requirements.txt`
+- Start command: `gunicorn -b 0.0.0.0:$PORT run:app`
+- Add env vars `NUTRITIONIX_APP_ID`, `NUTRITIONIX_API_KEY`, `DATABASE_URL` (Render injects this automatically when you add a Render PostgreSQL)
+- Plan: Free → deploy
 
 Deploy button (Render):
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fjdkelly951%2Fdads-carb-app)
+
+### Database (keeps history safe)
+- In Render dashboard: New → PostgreSQL → Free → create.
+- Copy the `External Database URL` (or click "Connect" on your service) and set it as `DATABASE_URL` env var on the web service.
+- No migrations needed; the app creates the `food_logs` table automatically on boot.
 
 ## Tech
 Python • Flask • Requests • HTML/CSS

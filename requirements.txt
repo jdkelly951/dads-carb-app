@@ -5,4 +5,4 @@ gunicorn
 python-dotenv
 requests
 pytz
-
+psycopg2-binary
